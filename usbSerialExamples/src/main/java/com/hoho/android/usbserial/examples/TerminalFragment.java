@@ -76,6 +76,7 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
         mainLooper = new Handler(Looper.getMainLooper());
     }
 
+    private UsbSerialWrapper usbSerialWrapper;
     /*
      * Lifecycle
      */
@@ -84,10 +85,16 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
         setRetainInstance(true);
-        deviceId = getArguments().getInt("device");
-        portNum = getArguments().getInt("port");
-        baudRate = getArguments().getInt("baud");
-        withIoManager = getArguments().getBoolean("withIoManager");
+        if (getArguments() != null) {
+            deviceId = getArguments().getInt("device");
+            portNum = getArguments().getInt("port");
+            baudRate = getArguments().getInt("baud");
+            withIoManager = getArguments().getBoolean("withIoManager");
+        }
+        usbSerialWrapper = new UsbSerialWrapper();
+        usbSerialWrapper.connect();
+
+        new Thread(() -> initNative()).start();
     }
 
     @Override
@@ -273,8 +280,8 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
 
     private void send(String str) {
         if(!connected) {
-            Toast.makeText(getActivity(), "not connected", Toast.LENGTH_SHORT).show();
-            return;
+//            Toast.makeText(getActivity(), "not connected", Toast.LENGTH_SHORT).show();
+//            return;
         }
         try {
         byte[] data = (str + '\n').getBytes();
@@ -283,7 +290,8 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
             spn.append(HexDump.dumpHexString(data)).append("\n");
             spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorSendText)), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
             receiveText.append(spn);
-            usbSerialPort.write(data, WRITE_WAIT_MILLIS);
+    //        usbSerialPort.write(data, WRITE_WAIT_MILLIS);
+            sendNative(data);
         } catch (Exception e) {
             onRunError(e);
         }
@@ -314,11 +322,20 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
         receiveText.append(spn);
     }
 
+    private void receiveNative(byte[] data) {
+        mainLooper.post(() -> {
+            receive(data);
+        });
+    }
+
     void status(String str) {
         SpannableStringBuilder spn = new SpannableStringBuilder(str+'\n');
         spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorStatusText)), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         receiveText.append(spn);
     }
+
+    native void sendNative(byte[] data);
+    native void initNative();
 
     class ControlLines {
         private static final int refreshInterval = 200; // msec
@@ -405,5 +422,9 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
             cdBtn.setChecked(false);
             riBtn.setChecked(false);
         }
+    }
+
+    static {
+        System.loadLibrary("serial-port");
     }
 }
