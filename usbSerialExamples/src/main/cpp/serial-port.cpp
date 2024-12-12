@@ -32,7 +32,7 @@ extern "C"
 void send_respose_to_java(char *data, int len) {
     LOGD("send_respose_to_java %d bytes\n", len);
 
-    // 不要在该函数中直接将数据返回 Java
+    // 不要在该函数中直接处理数据
     {
         std::lock_guard<std::mutex> lock(mtx);
         memcpy(buf, data, len);
