@@ -54,12 +54,15 @@ Java_com_hoho_android_usbserial_examples_TerminalFragment_sendNative(JNIEnv *env
 
 }
 
+static bool quit;
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_hoho_android_usbserial_examples_TerminalFragment_initNative(JNIEnv *env, jobject thiz) {
     // TODO: implement initNative()
     g_env = env;
     g_obj = thiz;
+    quit = false;
 
     jclass cls = env->GetObjectClass(thiz);
     receiveNative = env->GetMethodID(cls,"receiveNative","([B)V");
@@ -71,6 +74,9 @@ Java_com_hoho_android_usbserial_examples_TerminalFragment_initNative(JNIEnv *env
         std::unique_lock<std::mutex> locker(mtx);
         cv.wait(locker/*, []{ return !buffer.empty(); }*/);
 
+        if (quit)
+            break;
+
         jbyteArray array = g_env->NewByteArray(data_len);
         g_env->SetByteArrayRegion(array, 0, data_len, (const jbyte *) buf);
 
@@ -78,4 +84,12 @@ Java_com_hoho_android_usbserial_examples_TerminalFragment_initNative(JNIEnv *env
         g_env->CallVoidMethod(g_obj, receiveNative, array);
         g_env->DeleteLocalRef(array);
     }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_hoho_android_usbserial_examples_TerminalFragment_destroyNative(JNIEnv *env, jobject thiz) {
+    // TODO: implement destroyNative()
+    quit = true;
+    cv.notify_one();
 }

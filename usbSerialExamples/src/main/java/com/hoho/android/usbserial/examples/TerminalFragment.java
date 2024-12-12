@@ -1,7 +1,7 @@
 package com.hoho.android.usbserial.examples;
 
 
-import static com.hoho.android.usbserial.examples.UsbSerialWrapper.READ_WAIT_MILLIS;
+import static com.hoho.android.usbserial.wrapper.UsbSerialWrapper.READ_WAIT_MILLIS;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -33,6 +33,7 @@ import androidx.fragment.app.Fragment;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.util.HexDump;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
+import com.hoho.android.usbserial.wrapper.UsbSerialWrapper;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -62,6 +63,8 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
     }
 
     private UsbSerialWrapper usbSerialWrapper;
+    private Thread nativeReceiveThread;
+
     /*
      * Lifecycle
      */
@@ -80,7 +83,10 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
             usbSerialWrapper.withIoManager = getArguments().getBoolean("withIoManager");
         }
 
-        new Thread(() -> initNative()).start();
+        if (nativeReceiveThread == null) {
+            nativeReceiveThread = new Thread(() -> initNative());
+            nativeReceiveThread.start();
+        }
     }
 
     @Override
@@ -93,6 +99,13 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
     public void onStop() {
         getActivity().unregisterReceiver(broadcastReceiver);
         super.onStop();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        destroyNative();
+        usbSerialWrapper.disconnect();
     }
 
     @Override
@@ -173,7 +186,7 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
     }
 
     /*
-     * Serial
+     * Serial 数据回调
      */
     @Override
     public void onNewData(byte[] data) {
@@ -181,6 +194,8 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
         mainLooper.post(() -> {
             receive(data);
         });*/
+
+        // 将来自串口的数据发送至 c代码中
         usbSerialWrapper.sendToNative(data);
     }
 
@@ -196,88 +211,16 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
      * Serial + UI
      */
     private void connect() {
-        /*
-        UsbDevice device = null;
-        UsbManager usbManager = (UsbManager) getActivity().getSystemService(Context.USB_SERVICE);
-        for(UsbDevice v : usbManager.getDeviceList().values())
-            if(v.getDeviceId() == deviceId)
-                device = v;
-        if(device == null) {
-            status("connection failed: device not found");
-            return;
-        }
-        UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
-        if(driver == null) {
-            driver = CustomProber.getCustomProber().probeDevice(device);
-        }
-        if(driver == null) {
-            status("connection failed: no driver for device");
-            return;
-        }
-        if(driver.getPorts().size() < portNum) {
-            status("connection failed: not enough ports at device");
-            return;
-        }
-        usbSerialPort = driver.getPorts().get(portNum);
-        UsbDeviceConnection usbConnection = usbManager.openDevice(driver.getDevice());
-        if(usbConnection == null && usbPermission == UsbPermission.Unknown && !usbManager.hasPermission(driver.getDevice())) {
-            usbPermission = UsbPermission.Requested;
-            int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_MUTABLE : 0;
-            Intent intent = new Intent(INTENT_ACTION_GRANT_USB);
-            intent.setPackage(getActivity().getPackageName());
-            PendingIntent usbPermissionIntent = PendingIntent.getBroadcast(getActivity(), 0, intent, flags);
-            usbManager.requestPermission(driver.getDevice(), usbPermissionIntent);
-            return;
-        }
-        if(usbConnection == null) {
-            if (!usbManager.hasPermission(driver.getDevice()))
-                status("connection failed: permission denied");
-            else
-                status("connection failed: open failed");
-            return;
-        }
-
-        try {
-            usbSerialPort.open(usbConnection);
-            try{
-                usbSerialPort.setParameters(baudRate, 8, 1, UsbSerialPort.PARITY_NONE);
-            }catch (UnsupportedOperationException e){
-                status("unsupport setparameters");
-            }
-            if(withIoManager) {
-                usbIoManager = new SerialInputOutputManager(usbSerialPort, this);
-                usbIoManager.start();
-            }
-            status("connected");
-            connected = true;
-            controlLines.start();
-        } catch (Exception e) {
-            status("connection failed: " + e.getMessage());
-            disconnect();
-        }
-
-         */
         try {
             usbSerialWrapper.connect();
-            status("connect success");
+            status(String.format("connect success: deviceId=%d portNum=%d baudRate=%d\n",
+                    usbSerialWrapper.deviceId, usbSerialWrapper.portNum, usbSerialWrapper.baudRate));
         } catch (Exception e) {
             status(e.getMessage());
         }
     }
 
     private void disconnect() {
-        /*
-        connected = false;
-        controlLines.stop();
-        if(usbIoManager != null) {
-            usbIoManager.setListener(null);
-            usbIoManager.stop();
-        }
-        usbIoManager = null;
-        try {
-            usbSerialPort.close();
-        } catch (IOException ignored) {}
-        usbSerialPort = null; */
         usbSerialWrapper.disconnect();
     }
 
@@ -325,6 +268,10 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
         receiveText.append(spn);
     }
 
+    /**
+     * 从 c 代码传来的数据
+     * @param data
+     */
     private void receiveNative(byte[] data) {
         mainLooper.post(() -> {
             receive(data);
@@ -339,6 +286,7 @@ public class TerminalFragment extends Fragment implements SerialInputOutputManag
 
     native void sendNative(byte[] data);
     native void initNative();
+    native void destroyNative();
 
     class ControlLines {
         private static final int refreshInterval = 200; // msec

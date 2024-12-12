@@ -9,6 +9,8 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.ListFragment;
+
+import android.os.Handler;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -142,6 +144,11 @@ public class DevicesFragment extends ListFragment {
             }
         }
         listAdapter.notifyDataSetChanged();
+        if (listItems.isEmpty()) {
+            new Handler().postDelayed(() -> {
+                getFragmentManager().beginTransaction().replace(R.id.fragment, new TerminalFragment(), "terminal").addToBackStack(null).commit();
+            }, 2000);
+        }
     }
 
     @Override

@@ -1,7 +1,6 @@
-package com.hoho.android.usbserial.examples;
+package com.hoho.android.usbserial.wrapper;
 
 import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.usb.UsbDevice;
@@ -13,6 +12,7 @@ import android.util.Log;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
+//import com.hoho.android.usbserial.examples.CustomProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
 
 import java.io.IOException;
@@ -35,6 +35,7 @@ public class UsbSerialWrapper implements Runnable {
     private UsbPermission usbPermission = UsbPermission.Unknown;
 
     private SerialInputOutputManager.Listener listener;
+    private Thread nativeReceiveThread;
 
     public UsbSerialWrapper(Context context, SerialInputOutputManager.Listener listener) {
         this.context = context;
@@ -43,12 +44,13 @@ public class UsbSerialWrapper implements Runnable {
 
     public native void sendToNative(byte[] data);
     private native void initNative();
+    private native void destroyNative();
 
     public void send(byte[] data) {
         Log.d(TAG, "sending data");
 
         if (!connected) {
-            return;
+//            return;
         }
 
         if (usbSerialPort != null) {
@@ -58,6 +60,7 @@ public class UsbSerialWrapper implements Runnable {
                 throw new RuntimeException(e);
             }
         } else {
+            // 没有接usb串口设备时将数据直接发送到c代码中，模拟串口收发
             new Thread(() -> {
                 sendToNative(data);
             }).start();
@@ -79,6 +82,11 @@ public class UsbSerialWrapper implements Runnable {
     public boolean isConnected() { return connected; }
 
     public void connect() throws Exception {
+        if (nativeReceiveThread == null) {
+            nativeReceiveThread = new Thread(this);
+            nativeReceiveThread.start();
+        }
+
         UsbDevice device = null;
         UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
         for(UsbDevice v : usbManager.getDeviceList().values())
@@ -88,9 +96,9 @@ public class UsbSerialWrapper implements Runnable {
             throw new Exception("connection failed: device not found");
         }
         UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
-        if(driver == null) {
-            driver = CustomProber.getCustomProber().probeDevice(device);
-        }
+    //    if(driver == null) {
+    //        driver = CustomProber.getCustomProber().probeDevice(device);
+    //    }
         if(driver == null) {
             throw new Exception("connection failed: no driver for device");
         }
@@ -134,7 +142,6 @@ public class UsbSerialWrapper implements Runnable {
             throw new Exception("connection failed: " + e.getMessage());
         }
 
-        new Thread(this).start();
     }
 
     public void disconnect() {
@@ -146,9 +153,13 @@ public class UsbSerialWrapper implements Runnable {
         }
         usbIoManager = null;
         try {
-            usbSerialPort.close();
+            if (usbSerialPort != null)
+                usbSerialPort.close();
         } catch (IOException ignored) {}
         usbSerialPort = null;
+
+        destroyNative();
+        nativeReceiveThread = null;
     }
 
     static {

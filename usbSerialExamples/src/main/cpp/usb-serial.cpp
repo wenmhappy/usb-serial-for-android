@@ -2,6 +2,8 @@
 
 //
 // Created by wenmhappy on 2024/12/11.
+// 接收来自其他 c代码的数据，将其发送至java中，再由java发送至usb串口
+// 接收 usb串口经由 java 传来的数据，并通过回调函数发往其他 c代码中
 //
 #include <thread>
 #include <mutex>
@@ -40,11 +42,16 @@ void usb_set_receive_callback(ReceiveCallback callback) {
 
 }
 
-// 处理来自c/c++代码的要发送至usb串口的数据
+static bool quit = false;
+
+// 处理来自c/c++代码发送至usb串口的数据
 static void handle_sent_data() {
     while (true) {
         std::unique_lock<std::mutex> locker(mtx);
         cv.wait(locker/*, []{ return !buffer.empty(); }*/);
+
+        if (quit)
+            break;
 
         jbyteArray array = g_env->NewByteArray(data_len);
         g_env->SetByteArrayRegion(array, 0, data_len, (const jbyte *) buf);
@@ -57,7 +64,7 @@ static void handle_sent_data() {
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_hoho_android_usbserial_examples_UsbSerialWrapper_sendToNative(JNIEnv *env, jobject thiz,
+Java_com_hoho_android_usbserial_wrapper_UsbSerialWrapper_sendToNative(JNIEnv *env, jobject thiz,
                                                                    jbyteArray data) {
     // TODO: implement sendToNative()
     if (!receiveCallback) {
@@ -74,10 +81,11 @@ Java_com_hoho_android_usbserial_examples_UsbSerialWrapper_sendToNative(JNIEnv *e
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_hoho_android_usbserial_examples_UsbSerialWrapper_initNative(JNIEnv *env, jobject thiz) {
+Java_com_hoho_android_usbserial_wrapper_UsbSerialWrapper_initNative(JNIEnv *env, jobject thiz) {
     // TODO: implement initNative()
     g_env = env;
     g_obj = thiz;
+    quit = false;
 
     jclass cls = env->GetObjectClass(thiz);
     // 开启终端窗口，执行 javap -s '.\usbSerialForAndroid\build\intermediates\javac\debug\classes\com\hoho\android\
@@ -85,4 +93,11 @@ Java_com_hoho_android_usbserial_examples_UsbSerialWrapper_initNative(JNIEnv *env
     send = env->GetMethodID(cls,"send","([B)V");
 
     handle_sent_data();
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_hoho_android_usbserial_wrapper_UsbSerialWrapper_destroyNative(JNIEnv *env, jobject thiz) {
+    // TODO: implement destroyNative()
+    quit = true;
+    cv.notify_one();
 }
