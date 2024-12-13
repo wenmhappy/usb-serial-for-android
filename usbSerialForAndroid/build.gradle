@@ -16,7 +16,7 @@ android {
                 'rfc2217_server_host': '192.168.0.78',
                 'rfc2217_server_nonstandard_baudrates': 'true',   // true    false     false
         ]
-/*
+
         externalNativeBuild {
             cmake {
                 cppFlags "-frtti -fexceptions"
@@ -24,15 +24,14 @@ android {
             }
         }
 
- */
     }
-    /*
+
     externalNativeBuild {
         cmake {
             path "CMakeLists.txt"
             version "3.22.1"
         }
-    }*/
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11

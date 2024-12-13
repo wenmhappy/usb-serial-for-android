@@ -2,7 +2,7 @@
 
 //
 // Created by wenmhappy on 2024/12/11.
-// 接收来自其他 c代码的数据，将其发送至java中，再由java发送至usb串口
+// 接收来自其他 c代码的数据，将其发送至java中，再由java发送至usb串口；
 // 接收 usb串口经由 java 传来的数据，并通过回调函数发往其他 c代码中
 //
 #include <thread>
@@ -18,7 +18,7 @@ static jobject g_obj;
 // java 对象UsbSerialWrapper 的send方法的id
 static jmethodID send;
 
-#define BUF_SIZE 8096
+#define BUF_SIZE (32 * 1024)
 static char buf[BUF_SIZE];
 static int data_len;
 static std::mutex mtx;
@@ -56,6 +56,7 @@ static void handle_sent_data() {
         jbyteArray array = g_env->NewByteArray(data_len);
         g_env->SetByteArrayRegion(array, 0, data_len, (const jbyte *) buf);
 
+        // 把数据发送到 java中
         g_env->CallVoidMethod(g_obj, send, array);
         g_env->DeleteLocalRef(array);
 

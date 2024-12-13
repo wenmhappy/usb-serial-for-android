@@ -1,1 +1,2 @@
-include 'usbSerialForAndroid', 'usbSerialExamples'
+include 'usbSerialExamples'
+include 'usbSerialForAndroid'

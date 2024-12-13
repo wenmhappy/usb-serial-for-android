@@ -7,8 +7,13 @@ cmake_minimum_required(VERSION 3.10.2)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
+# 路径必须是绝对路径，以 CMAKE_SOURCE_DIR 为基准
 include_directories("${CMAKE_SOURCE_DIR}/../usbSerialExamples/src/main/cpp")
 
+set(ARM64_LIB_DIR "${CMAKE_SOURCE_DIR}/libs/arm64-v8a")
+
+add_library(usb-serial SHARED IMPORTED)
+set_target_properties(usb-serial PROPERTIES IMPORTED_LOCATION  ${ARM64_LIB_DIR}/libusb-serial.so)
 
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
@@ -25,15 +30,15 @@ add_library( # Sets the name of the library.
              src/main/cpp/serial-port.cpp
              )
 
-add_library( # Sets the name of the library.
-        usb-serial
+#add_library( # Sets the name of the library.
+#        usb-serial
 
         # Sets the library as a shared library.
-        SHARED
+#        SHARED
 
         # Provides a relative path to your source file(s).
-        src/main/cpp/usb-serial.cpp
-)
+#        src/main/cpp/usb-serial.cpp
+#)
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
